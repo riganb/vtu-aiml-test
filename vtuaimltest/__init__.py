@@ -1,1 +1,1 @@
-from main import load_program
+from vtuaimltest.aiml import load_program
