@@ -1,6 +1,6 @@
 def load_program(program_number: int, print_program: bool = True):
     PROGRAMS = [
-        '''
+        """
 def aStarAlgo(start_node, stop_node):
     open_set = set(start_node)
     closed_set = set()
@@ -83,7 +83,7 @@ Graph_nodes = {
 }
 
 aStarAlgo('A', 'J')
-        ''',
+        """,
         '''
 """Recursive implementation of AO* algorithm"""
 
@@ -204,7 +204,7 @@ G2 = Graph(graph2, h2, 'A')  # Instantiate Graph object with graph, heuristic va
 G2.applyAOStar()  # Run the AO* algorithm
 G2.printSolution()  # Print the solution graph as output of the AO* algorithm search
         ''',
-        '''
+        """
 import csv
 
 with open("CandidateElimination.csv") as f:
@@ -239,7 +239,7 @@ with open("CandidateElimination.csv") as f:
     print("\nFinal specific hypothesis:\n", s)
 
     print("\nFinal general hypothesis:\n", gh)
-        ''',
+        """,
         '''
 from pprint import pprint
 import pandas as pd
@@ -379,7 +379,7 @@ df_tennis[['PlayTennis', 'predicted']]
 # train_data tree print ('\n\n Accuracy is : ' + str( sum(test_data['PlayTennis']==test_data['predicted2'] ) / (
 # 1.0*len(test_data.index)) ))
         ''',
-        '''
+        """
 import numpy as np
 
 X = np.array(([2, 9], [1, 5], [3, 6]), dtype=float)
@@ -432,45 +432,121 @@ for i in range(epoch):
 print("Input: \n" + str(X))
 print("Actual Output: \n" + str(y))
 print("Predicted Output: \n", output)
-        ''',
-        '''
-from sklearn.metrics import accuracy_score, confusion_matrix, precision_score, recall_score
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.model_selection import train_test_split
-import pandas as pd
+        """,
+        """
+import csv
+import random
+import math
 
-msg = pd.read_csv('NBC.csv', names=['message', 'label'])
-print("Total Instances of Dataset: ", msg.shape[0])
-msg['labelnum'] = msg.label.map({'pos': 1, 'neg': 0})
+def loadCsv(filename):
+  lines = csv.reader(open(filename, "r"))
+  dataset = list(lines)
+  for i in range(len(dataset)):
+    dataset[i] = [float(x) for x in dataset[i]]
+  return dataset
 
-X = msg.message
-y = msg.labelnum
+def splitDataset(dataset, splitRatio):
+  trainSize = int(len(dataset) * splitRatio)
+  trainSet = []
+  copy = list(dataset)
+  while len(trainSet) < trainSize:
+    index = random.randrange(len(copy))
+    trainSet.append(copy.pop(index))
+  return [trainSet, copy]
 
-Xtrain, Xtest, ytrain, ytest = train_test_split(X, y)
+def separateByClass(dataset):
+  separated = {}
+  for i in range(len(dataset)):
+    vector = dataset[i]
+    if (vector[-1] not in separated):
+      separated[vector[-1]] = []
+    separated[vector[-1]].append(vector)
+  return separated
 
-count_v = CountVectorizer()
-Xtrain_dm = count_v.fit_transform(Xtrain)
-Xtest_dm = count_v.transform(Xtest)
+def mean(numbers):
+  return sum(numbers)/float(len(numbers))
 
-df = pd.DataFrame(Xtrain_dm.toarray(), columns=count_v.get_feature_names())
-print(df[0:5])
+def stdev(numbers):
+  avg = mean(numbers)
+  variance = sum([pow(x-avg,2) for x in numbers])/float(len(numbers)-1)
+  return math.sqrt(variance)
 
-clf = MultinomialNB()
-clf.fit(Xtrain_dm, ytrain)
-pred = clf.predict(Xtest_dm)
+def summarize(dataset):
+  summaries = [(mean(attribute), stdev(attribute)) for attribute in zip(*dataset)]
+  del summaries[-1]
+  return summaries
 
-for doc, p in zip(Xtrain, pred):
-    p = 'pos' if p == 1 else 'neg'
-    print("%s -> %s" % (doc, p))
+def summarizeByClass(dataset):
+  separated = separateByClass(dataset)
+  summaries = {}
+  for classValue, instances in separated.items():
+    summaries[classValue] = summarize(instances)
+  return summaries
 
-print('Accuracy Metrics: \n')
-print('Accuracy: ', accuracy_score(ytest, pred))
-print('Recall: ', recall_score(ytest, pred))
-print('Precision: ', precision_score(ytest, pred))
-print('Confusion Matrix: \n', confusion_matrix(ytest, pred))
-        ''',
-        '''
+def calculateProbability(x, mean, stdev):
+  exponent = math.exp(-(math.pow(x-mean,2)/(2*math.pow(stdev,2))))
+  return (1 / (math.sqrt(2*math.pi) * stdev)) * exponent
+
+def calculateClassProbabilities(summaries, inputVector):
+  probabilities = {}
+  for classValue, classSummaries in summaries.items():
+    probabilities[classValue] = 1
+    for i in range(len(classSummaries)):
+      mean, stdev = classSummaries[i]
+      x = inputVector[i]
+      probabilities[classValue] *= calculateProbability(x, mean, stdev)
+  return probabilities
+
+def predict(summaries, inputVector):
+  probabilities = calculateClassProbabilities(summaries, inputVector)
+  bestLabel, bestProb = None, -1
+  for classValue, probability in probabilities.items():
+    if bestLabel is None or probability > bestProb:
+      bestProb = probability
+      bestLabel = classValue
+  return bestLabel
+
+def getPredictions(summaries, testSet):
+  predictions = []
+  for i in range(len(testSet)):
+    result = predict(summaries, testSet[i])
+    predictions.append(result)
+  return predictions
+
+def getAccuracy(testSet, predictions):
+  correct = 0
+  for i in range(len(testSet)):
+    if testSet[i][-1] == predictions[i]:
+      correct += 1
+  return (correct/float(len(testSet))) * 100.0
+
+def main():
+  filename = '/content/naivedata.csv'
+  splitRatio = 0.87
+  dataset = loadCsv(filename)
+  print(dataset)
+  print("******************************************************************")
+  trainingSet, testSet = splitDataset(dataset, splitRatio)
+  print(trainingSet)
+  print("******************************************************************")
+  print(len(testSet))
+  print(testSet)
+  print("********************************************************************")
+  print("----------------------------------Output of naïve Bayesian classifier\n")
+  print('Spliting {} rows into training={} and testing={} rows'.format(len(dataset), len(trainingSet), len(testSet)))
+  # prepare model
+  summaries = summarizeByClass(trainingSet)
+  print("*********************************************************************")
+  print(summaries)
+  # test model
+  predictions = getPredictions(summaries, testSet)
+  accuracy = getAccuracy(testSet, predictions)
+  print('Classification Accuracy: {}%'.format(accuracy))
+  print("-----------------------------------------------------")
+
+main()
+        """,
+        """
 import matplotlib.pyplot as plt
 from sklearn import datasets
 from sklearn.cluster import KMeans
@@ -515,8 +591,8 @@ print("K Means:\n",model1.labels_)
 print("EM:\n",model2.predict(X))
 print("Accuracy of KMeans is ",sm.accuracy_score(Y,model1.labels_))
 print("Accuracy of EM is ",sm.accuracy_score(Y, model2.predict(X)))
-        ''',
-        '''
+        """,
+        """
 from sklearn.model_selection import train_test_split
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import classification_report, confusion_matrix
@@ -533,8 +609,8 @@ print('Confusion matrix is as follows')
 print(confusion_matrix(y_test, y_pred))
 print('Accuracy Metrics')
 print(classification_report(y_test, y_pred))
-        ''',
-        '''
+        """,
+        """
 from math import ceil
 import numpy as np
 from scipy import linalg
@@ -579,7 +655,7 @@ plt.plot(x, y, "r.")
 plt.show()
 plt.plot(x, yest, "b-")
 plt.show()
-        ''',
+        """,
     ]
     if print_program == False:
         return PROGRAMS[program_number]
