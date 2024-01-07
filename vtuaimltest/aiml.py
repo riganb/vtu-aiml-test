@@ -207,11 +207,17 @@ G2.printSolution()  # Print the solution graph as output of the AO* algorithm se
         """
 import csv
 
-with open("CandidateElimination.csv") as f:
+with open("/content/CandidateElimination.csv") as f:
     csv_file = csv.reader(f)
     data = list(csv_file)
 
+    print("Positive Samples are: \n")
+    for i in data:
+      if i[-1]=="Yes":
+        print(i,"\n")
+        
     s = data[1][:-1]
+
     g = [['?' for i in range(len(s))] for j in range(len(s))]
 
     for i in data:
@@ -230,6 +236,7 @@ with open("CandidateElimination.csv") as f:
         print("\nSteps of Candidate Elimination Algorithm", data.index(i) + 1)
         print(s)
         print(g)
+
     gh = []
     for i in g:
         for j in i:
@@ -239,146 +246,70 @@ with open("CandidateElimination.csv") as f:
     print("\nFinal specific hypothesis:\n", s)
 
     print("\nFinal general hypothesis:\n", gh)
+
         """,
-        '''
-from pprint import pprint
+        """
+import numpy as np
 import pandas as pd
-from pandas import DataFrame
 
-# df_tennis = DataFrame.from
-df_tennis = pd.read_csv('ID3.csv')
+data = pd.read_csv('p4.csv')
 
-# df_tennis = DataFrame.from
-df_tennis = pd.read_csv('ID3.csv')
+def entropy(target):
+    val,counts = np.unique(target,return_counts = True)
+    ent = 0
+    for i in range(len(val)):
+        c = counts[i]/sum(counts)
+        ent += -c*np.log2(c)
+    return ent
 
+def infoGain(data,features,target):
+    te = entropy(data[target])
+    val,counts = np.unique(data[features],return_counts = True)
+    eg = 0
+    for i in range(len(val)):
+        c = counts[i]/sum(counts)
+        eg += c*entropy(data[data[features] == val[i]][target])
+    InfoGain = te-eg
+    return InfoGain
 
-# print(df_tennis)
+def id3(data, features, target, pnode):
+    
+    t = np.unique(data[target])
+    
+    if len(t) == 1:
+        return t[0]
+    
+    if len(features) == 0:
+        return pnode
+    
+    pnode = t[np.argmax(t[1])]
+    
+    IG = [infoGain(data,f,target) for f in features]
+    index = np.argmax(IG)
+    
+    col = features[index]
+    tree = {col:{}}
+    
+    features = [f for f in features if f!=col]
+    
+    for val in np.unique(data[col]):
+        sub_data = data[data[col]==val].dropna()
+        subtree = id3(sub_data,features,target,pnode)
+        tree[col][val] = subtree
+    return tree
 
-# Calculate the Entropy of given probability
-def entropy(probs):
-    import math
-    return sum([-prob * math.log(prob, 2) for prob in probs])
+testData = data.sample(frac = 0.1)
+data.drop(testData.index,inplace = True)
 
+target = 'play'
+features = data.columns[data.columns!=target]
 
-def entropy_of_list(a_list):  # Entropy calculation of list of discrete val ues(YES / NO)
-    from collections import Counter
-    cnt = Counter(x for x in a_list)
-    print("No and Yes Classes:", a_list.name, cnt)
-    num_instances = len(a_list) * 1.0
-    probs = [x / num_instances for x in cnt.values()]
-    return entropy(probs)  # Call Entropy:
+tree = id3(data,features,target,None)
+print (tree, end='\n\n')
 
-
-# The initial entropy of the YES/NO attribute for our dataset.
-# print(df_tennis['PlayTennis'])
-total_entropy = entropy_of_list(df_tennis['PlayTennis'])
-print("Entropy of given PlayTennis Data Set:", total_entropy)
-
-
-def information_gain(df, split_attribute_name, target_attribute_name, trace=0):
-    print("Information Gain Calculation of ", split_attribute_name)
-    df_split = df.groupby(split_attribute_name)
-    """
- Takes a DataFrame of attributes,and quantifies the entropy of a target
- attribute after performing a split along the values of another attribute.
- """  # print(df_split.groups)
-    for name, group in df_split:
-        print(name)
-        print(group)
-    # Calculate Entropy for Target Attribute, as well as
-    # Proportion of Obs in Each Data-Split
-    nobs = len(df.index) * 1.0
-    # print("NOBS",nobs)
-    df_agg_ent = df_split.agg({target_attribute_name: [entropy_of_list, lambda x: len(x) / nobs]})[
-        target_attribute_name]
-    # print("FAGGED",df_agg_ent)
-    df_agg_ent.columns = ['Entropy', 'PropObservations']
-    # if traced: # helps understand what fxn is doing:
-    # Calculate Information Gain:
-    new_entropy = sum(df_agg_ent['Entropy'] * df_agg_ent['PropObservations'])
-    old_entropy = entropy_of_list(df[target_attribute_name])
-    return old_entropy - new_entropy
-
-
-# print('Info-gain for Outlook is :'+str( information_gain(df_tennis, 'Outlook', 'PlayTennis')),"\n")
-# print('\n Info-gain for Humidity is: ' + str( information_gain(df_tennis,'Humidity', 'PlayTennis')),"\n")
-# print('\n Info-gain for Wind is:' + str( information_gain(df_tennis, 'Wind', 'PlayTennis')),"\n")
-# print('\n Info-gain for Temperature is:' + str( information_gain(df_tennis, 'Temperature','PlayTennis')),"\n")
-
-
-def id3(df, target_attribute_name, attribute_names, default_class=None):  # Tally target attribute
-    from collections import Counter
-    cnt = Counter(x for x in df[target_attribute_name])  # class of YES /NO
-    # First check: Is this split of the dataset homogeneous?
-    if len(cnt) == 1:
-        return next(iter(cnt))
-    # Second check: Is this split of the dataset empty?
-    # if yes, return a default value
-    elif df.empty or (not attribute_names):
-        return default_class
-        # Otherwise: This dataset is ready to be divvied up!
-    else:
-        # [index_of_max] # most common value  of  target  attribute in dataset
-        default_class = max(cnt.keys())
-        # Choose Best Attribute to split on:
-        gainz = [information_gain(df, attr, target_attribute_name)
-                 for attr in attribute_names]
-        index_of_max = gainz.index(max(gainz))
-        best_attr = attribute_names[index_of_max]
-        # Create an empty tree, to be populated in a moment
-        tree = {best_attr: {}}
-        remaining_attribute_names = [
-            i for i in attribute_names if i != best_attr]
-        # Split dataset
-        # On each split, recursively call this algorithm.
-        # populate the empty tree with subtrees, which
-        # are the result of the recursive call
-        for attr_val, data_subset in df.groupby(best_attr):
-            subtree = id3(data_subset, target_attribute_name,
-                          remaining_attribute_names, default_class)
-            tree[best_attr][attr_val] = subtree
-        return tree
-
-
-# Predicting Attributes
-attribute_names = list(df_tennis.columns)
-print("List of Attributes:", attribute_names)
-attribute_names.remove('PlayTennis')  # Remove the class attribute
-print("Predicting Attributes:", attribute_names)
-
-# Tree Construction
-
-tree = id3(df_tennis, 'PlayTennis', attribute_names)
-print("\n\nThe Resultant Decision Tree is :\n")
-pprint(tree)
-
-
-# Classification Accuracy
-def classify(instance, tree, default=None):
-    attribute = next(iter(tree))  # tree.keys()[0]
-    if instance[attribute] in tree[attribute].keys():
-        result = tree[attribute][instance[attribute]]
-        if isinstance(result, dict):  # this is a tree, delve deeper
-            return classify(instance, result)
-        else:
-            return result  # this is a label
-    else:
-        return default
-
-
-df_tennis['predicted'] = df_tennis.apply(classify, axis=1, args=(tree, 'No'))
-# classify func allows for a default arg: when tree doesn't have answered for a particular
-# combination of attribute-values, we can use 'no' as the default guess
-print('Accuracy is:' + str(sum(df_tennis['PlayTennis'] ==
-      df_tennis['predicted']) / (1.0 * len(df_tennis.index))))
-df_tennis[['PlayTennis', 'predicted']]
-
-# Classification Accuracy: Training/Testing Set training_data = df_tennis.iloc[1:-4] # all but last thousand
-# instances test_data = df_tennis.iloc[-4:] # just the last thousand train_tree = id3(training_data, 'PlayTennis',
-# attribute_names) test_data['predicted2'] = test_data.loc(classify,axis=1,args=(train_tree,'Yes') ) # <----
-# train_data tree print ('\n\n Accuracy is : ' + str( sum(test_data['PlayTennis']==test_data['predicted2'] ) / (
-# 1.0*len(test_data.index)) ))
-        ''',
+test = testData.to_dict('records')[0]
+print(test, '=>', id3(test,features,target,None))
+        """,
         """
 import numpy as np
 
@@ -521,23 +452,18 @@ def getAccuracy(testSet, predictions):
   return (correct/float(len(testSet))) * 100.0
 
 def main():
-  filename = '/content/naivedata.csv'
+  filename = 'diabetes.csv'
   splitRatio = 0.87
   dataset = loadCsv(filename)
-  print(dataset)
-  print("******************************************************************")
+
   trainingSet, testSet = splitDataset(dataset, splitRatio)
-  print(trainingSet)
-  print("******************************************************************")
+
   print(len(testSet))
-  print(testSet)
-  print("********************************************************************")
-  print("----------------------------------Output of naïve Bayesian classifier\n")
+
   print('Spliting {} rows into training={} and testing={} rows'.format(len(dataset), len(trainingSet), len(testSet)))
   # prepare model
   summaries = summarizeByClass(trainingSet)
-  print("*********************************************************************")
-  print(summaries)
+ 
   # test model
   predictions = getPredictions(summaries, testSet)
   accuracy = getAccuracy(testSet, predictions)
@@ -593,68 +519,105 @@ print("Accuracy of KMeans is ",sm.accuracy_score(Y,model1.labels_))
 print("Accuracy of EM is ",sm.accuracy_score(Y, model2.predict(X)))
         """,
         """
-from sklearn.model_selection import train_test_split
+from sklearn.datasets import load_iris
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import classification_report, confusion_matrix
-from sklearn import datasets
+import numpy as np
+from sklearn.model_selection import train_test_split
 
-iris = datasets.load_iris()
-iris_data = iris.data
-iris_labels = iris.target
-x_train, x_test, y_train, y_test = train_test_split(iris_data, iris_labels, test_size=0.20)
-classifier = KNeighborsClassifier(n_neighbors=5)
-classifier.fit(x_train, y_train)
-y_pred = classifier.predict(x_test)
-print('Confusion matrix is as follows')
+iris_dataset = load_iris()
+print("\nIRIS FEATURES \TARGET NAMES: \n", iris_dataset.target_names)
+
+
+for i in range(len(iris_dataset.target_names)):
+    print("\n[{0}]:[{1}]".format(i, iris_dataset.target_names[i]))
+print("\nIRIS DATA :\n", iris_dataset["data"])
+
+
+X_train, X_test, y_train, y_test = train_test_split(
+    iris_dataset["data"], iris_dataset["target"], random_state=0
+)
+print("\nTarget :\n", iris_dataset["target"])
+print("\nX TRAIN \n", X_train)
+print("\nX TEST \n", X_test)
+print("\nY TRAIN \n", y_train)
+print("\nY TEST \n", y_test)
+
+
+kn = KNeighborsClassifier(n_neighbors=1)
+kn.fit(X_train, y_train)
+
+x_new = np.array([[5, 2.9, 1, 0.2]])
+print("\nXNEW \n", x_new)
+prediction = kn.predict(x_new)
+
+print("\nPredicted target value: {}\n".format(prediction))
+print("\nPredicted feature name:{}\n".format(iris_dataset["target_names"][prediction]))
+
+
+i = 1
+x = X_test[i]
+x_new = np.array([x])
+print("\nXNEW \n", x_new)
+for i in range(len(X_test)):
+    x = X_test[i]
+    x_new = np.array([x])
+    prediction = kn.predict(x_new)
+    print(
+        "\n Actual:[{0}][{1}] \t, Predicted:{2}{3}".format(
+            y_test[i],
+            iris_dataset["target_names"][y_test[i]],
+            prediction,
+            iris_dataset["target_names"][prediction],
+        )
+    )
+print("\nTEST SCORE[ACCURACY]: {:.2f}\n".format(kn.score(X_test, y_test)))
+
+from sklearn.metrics import confusion_matrix
+
+y_pred = kn.predict(X_test)
+print("Confusion matrix is: ")
 print(confusion_matrix(y_test, y_pred))
-print('Accuracy Metrics')
-print(classification_report(y_test, y_pred))
         """,
         """
-from math import ceil
 import numpy as np
-from scipy import linalg
+from ipywidgets import interact
+from bokeh.plotting import figure, show, output_notebook
+from bokeh.layouts import gridplot
+from bokeh.io import push_notebook
+output_notebook()
 
+def local_regression(x0, X, Y, tau):
+ x0 = np.r_[1, x0]
+ X = np.c_[np.ones(len(X)), X]
+ # fit model: normal equations with kernel
+ xw = X.T * radial_kernel(x0, X, tau)
+ beta = np.linalg.pinv(xw @ X) @ xw @ Y
+ # predict value
+ return x0 @ beta
 
-def lowess(x, y, f, iterations):
-    n = len(x)
-    r = int(ceil(f * n))
-    h = [np.sort(np.abs(x - x[i]))[r] for i in range(n)]
-    w = np.clip(np.abs((x[:, None] - x[None, :]) / h), 0.0, 1.0)
-    w = (1 - w ** 3) ** 3
-    yest = np.zeros(n)
-    delta = np.ones(n)
-    for iteration in range(iterations):
-        for i in range(n):
-            weights = delta * w[:, i]
-            b = np.array([np.sum(weights * y), np.sum(weights * y * x)])
-            A = np.array([[np.sum(weights), np.sum(weights * x)], [np.sum(weights * x), np.sum(weights * x * x)]])
-            beta = linalg.solve(A, b)
-            yest[i] = beta[0] + beta[1] * x[i]
+def radial_kernel(x0, X, tau):
+ return np.exp(np.sum((X - x0) ** 2, axis=1) / (-2 * tau * tau))
 
-        residuals = y - yest
-        s = np.median(np.abs(residuals))
-        delta = np.clip(residuals / (6.0 * s), -1, 1)
-        delta = (1 - delta ** 2) ** 2
+n = 1000
+# generate dataset
+X = np.linspace(-3, 3, num=n)
+Y = np.log(np.abs(X ** 2 - 1) + .5)
+# jitter X
+X += np.random.normal(scale=.1, size=n)
 
-    return yest
+def plot_lwr(tau):
+ # prediction
+ domain = np.linspace(-3, 3, num=300)
+ prediction = [local_regression(x0, X, Y, tau) for x0 in domain]
+ plot = figure(plot_width=400, plot_height=400)
+ plot.title.text = 'tau=%g' % tau
+ plot.scatter(X, Y, alpha=.3)
+ plot.line(domain, prediction, line_width=2, color='red')
+ return plot
 
-
-import math
-
-n = 100
-x = np.linspace(0, 2 * math.pi, n)
-y = np.sin(x) + 0.3 * np.random.randn(n)
-f = 0.25
-iterations = 3
-yest = lowess(x, y, f, iterations)
-
-import matplotlib.pyplot as plt
-
-plt.plot(x, y, "r.")
-plt.show()
-plt.plot(x, yest, "b-")
-plt.show()
+show(gridplot([[plot_lwr(10.), plot_lwr(1.)],[plot_lwr(0.1), plot_lwr(0.01)]]))
+# #show(plot, notebook_handle=True)
+# interact(interactive_update, tau=(0.01, 3., 0.01))
         """,
     ]
     if print_program == False:
